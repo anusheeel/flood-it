@@ -15,15 +15,6 @@ An interactive Three.js atlas of Nepal’s mountains, rivers, lakes and settleme
 - Residential area exposure, sensitivity at ±1 m, scenario comparison, source polygons and JSON reports.
 - Focused area inspection with Previous / Next and a downloadable PNG of the actual 3D view and result context.
 
-## Read this before interpreting results
-
-This is **experimental, uncalibrated screening, not an operational forecast**. It does not calculate rainfall, discharge, velocity, flood arrival time, return periods or probabilities. It cannot support evacuation decisions or certify an area as safe.
-
-A scenario’s offset is relative to an estimated channel surface derived from elevation data. It is **not today’s river level or a gauge reading**. Results cover a local assessment window; exposure may continue beyond it. Areas outside the assessed window have no result.
-
-House symbols mark settlement locations. Shaded polygons represent residential land use, **not individual buildings or counts of homes or people**. Red fills identify the residential portion intersected by the estimated extent; a red outline locates a polygon with some exposure. OSM coverage varies.
-
-Terrain materials and snow colours are illustrative, not satellite imagery. Nearby features are geographically grouped; the explorer does not assert verified basin-wide drainage connections.
 
 [Method, data and validation notes](public/flood/method.html) · [Flood data licence](public/flood/LICENSE.txt) · [Geography licence](public/geography/LICENSE.txt)
 
@@ -47,13 +38,6 @@ npm start
 
 The tests cover connected inundation, geometry and area accounting, missing elevations, sensitivity, worker cancellation, UI progression and result retention, snapshot PNG encoding, partial map-layer failures, and the actual production worker asset URL. They do not constitute hydraulic calibration.
 
-## Deploy to Vercel
-
-Import this GitHub repository into Vercel with the **Next.js** preset. Use `npm ci` to install and `npm run build` to build. Deploy from Git so the full bundled geographic dataset is included; a CLI source upload can exceed the Hobby upload allowance.
-
-The single server route, `/api/elevation/[lat]/[lng]`, streams bounded byte ranges from the fixed public Copernicus DEM bucket. It validates Nepal tile coordinates and byte ranges. Flood calculations run in the browser worker. No accounts, tracking, private databases or credentials are required by the app.
-
-Static terrain and OSM snapshot assets are included for reproducibility. Avoid committing generated `.next`, `node_modules`, `.vercel`, environment files, raw input PBF/TIFF scratch data or hosting credentials. To update OSM data, use the import/reproduction scripts with a current licensed extract and update the source manifest and documentation.
 
 ## Data and attribution
 
@@ -65,6 +49,3 @@ Static terrain and OSM snapshot assets are included for reproducibility. Avoid c
 
 Application code is MIT licensed. This licence does **not** replace the licences or attribution obligations of geographic datasets, elevation data, photographs or dependencies.
 
-## Interface concept
-
-[Sidebar and area-inspection mockup](docs/sidebar-concept.png) — AI-generated interface concept. Its landscape and example polygons are illustrative; the running app uses the included elevation and mapped data. The concept is not a flood result.
