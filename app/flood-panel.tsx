@@ -12,10 +12,10 @@ import { loadRiverIndex } from './flood-inputs';
 import { loadAssessment } from './flood-client';
 import { affectedCount, areaFeature, areaStatus, formatArea, supportedRiver, prepareFlood, totalAffected, type FloodPilot, type FloodResult } from './flood';
 
-type Props={river:PlaceEntry|null;selected:PlaceEntry|null;ready:boolean;onPilot:()=>Promise<boolean>;bounds:number[];onRiver:(river:PlaceEntry)=>void;onInspect:(area:PlaceEntry)=>void;
+type Props={river:PlaceEntry|null;selected:PlaceEntry|null;ready:boolean;onPilot:()=>Promise<boolean>;bounds:number[];onRiver:(river:PlaceEntry)=>void;onInspect:(area:PlaceEntry)=>void;onFocusRiver:()=>void;
   onOverlay:(pilot:FloodPilot|null,result:FloodResult|null)=>void;onClose:()=>void; review:boolean;onReview:()=>void;onEdit:()=>void;onCapture:()=>HTMLCanvasElement;onClearSelection:()=>void;};
 const STATUS={exposed:'Potentially exposed',sensitive:'Exposed at +1 m',outside:'Outside this scenario',unassessed:'Partly / not assessed'};
-export default function FloodPanel({river,selected,ready,onPilot,bounds,onRiver,onInspect,onOverlay,onClose,review,onReview,onEdit,onCapture,onClearSelection}:Props){
+export default function FloodPanel({river,selected,ready,onPilot,bounds,onRiver,onInspect,onFocusRiver,onOverlay,onClose,review,onReview,onEdit,onCapture,onClearSelection}:Props){
   const [pilot,setPilot]=useState<FloodPilot|null>(null);
   const [stage,setStage]=useState(3);
   const chosen=supportedRiver(river);
@@ -108,7 +108,7 @@ export default function FloodPanel({river,selected,ready,onPilot,bounds,onRiver,
       <section className="flood-step"><span className="step-label"><b>01</b>SELECT A RIVER REACH</span>
         {river&&<button className={`pilot-reach ${chosen?'chosen':''}`} onClick={()=>setChoosing(v=>!v)}><Waves size={22}/><span><strong>{featureName(river)}</strong><small>{river.id} · {river.center[1].toFixed(3)}° N, {river.center[0].toFixed(3)}° E</small><small>{pilot?`${pilot.reachLengthKm.toFixed(1)} km assessed reach`:'Local reach around your selection'}</small></span><ChevronDown size={17}/></button>}
         {!river&&<p className="flood-help">Click a river in the landscape or find one below.</p>}
-        <button className="change-river" onClick={()=>setChoosing(v=>!v)}>{choosing?'Close river finder':'Choose another river'}</button>
+        <div className="river-selection-actions"><button className="change-river" onClick={()=>setChoosing(v=>!v)}>{choosing?'Close river finder':'Choose another river'}</button>{river&&<button className="focus-river" onClick={onFocusRiver} disabled={!ready}><ArrowUpRight size={13}/>Focus river</button>}</div>
         {choosing&&<div className="river-finder">
           <input className="area-search" type="search" aria-label="Find a river or stream" placeholder="River name, नेपाली or OSM ID…" value={riverQuery} onChange={e=>setRiverQuery(e.target.value)}/>
           <label className="river-scope">Look in <select aria-label="River search area" value={scope} onChange={e=>setScope(e.target.value as 'view'|'nepal')}><option value="view">Current terrain</option><option value="nepal">All Nepal</option></select><span>{candidates.length.toLocaleString()} segments</span></label>

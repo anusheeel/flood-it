@@ -240,6 +240,13 @@ export class MountainScene{
     this.paintLayers();
   }
   private showAssessmentTerrain(pilot:FloodPilot){
+    // Capture the latest view when data arrives, including navigation during preparation.
+    this.stopCameraMotion();
+    const previous=this.model,anchor=previous?this.getCoordinates():null;
+    const position=this.camera.position.clone(),target=this.controls.target.clone(),cursor=this.controls.cursor.clone();
+    const fog=this.scene.fog?.clone();
+    const longitudeScale=previous?previous.widthKm/(previous.bounds[2]-previous.bounds[0]):111.32*Math.cos(pilot.center[1]*Math.PI/180);
+    const latitudeScale=previous?previous.depthKm/(previous.bounds[3]-previous.bounds[1]):111.32;
     const source=pilot.runtime!.elevations,[w,s,e,n]=pilot.bounds,dx=(e-w)/pilot.cols,dy=(n-s)/pilot.rows;
     const bounds:[number,number,number,number]=[w+dx/2,s+dy/2,e-dx/2,n-dy/2],center:[number,number]=[(w+e)/2,(s+n)/2];
     // Rendering may thin vertices on a small screen. The analysis arrays and
@@ -250,9 +257,23 @@ export class MountainScene{
     for(const h of source)if(Number.isFinite(h)){min=Math.min(min,h);max=Math.max(max,h);}
     for(let r=0;r<rowIds.length;r++)for(let c=0;c<columns.length;c++){const y=Math.round(r/(rowIds.length-1)*(pilot.rows-1)),x=Math.round(c/(columns.length-1)*(pilot.cols-1)),h=source[y*pilot.cols+x];heights[r*columns.length+c]=Number.isFinite(h)?h:min;}
     const token=++this.request;this.renderedRequest=token;
-    this.model={id:pilot.id,center,bounds,cols:columns.length,rows:rowIds.length,widthKm:(bounds[2]-bounds[0])*111.32*Math.cos(center[1]*Math.PI/180),depthKm:(bounds[3]-bounds[1])*111.32,minHeight:min,maxHeight:max,file:''};
+    this.model={id:pilot.id,center,bounds,cols:columns.length,rows:rowIds.length,widthKm:(bounds[2]-bounds[0])*longitudeScale,depthKm:(bounds[3]-bounds[1])*latitudeScale,minHeight:min,maxHeight:max,file:''};
     this.heights=heights;this.focus=pilot.center;this.selectedId=null;this.geography=[];this.flight=null;
-    this.removeMesh();this.buildMesh();this.buildLabels();this.frameModel();this.callbacks.onWindow([...bounds]);
+    this.removeMesh();this.buildMesh();this.buildLabels();
+    if(anchor){
+      // Both models use the same kilometres-per-degree scale. Rebase the origin
+      // without changing heading, pitch, zoom, altitude or the point under the cursor.
+      const shifted=new THREE.Vector3((anchor[0]-center[0])*longitudeScale,target.y,(center[1]-anchor[1])*latitudeScale);
+      const delta=shifted.clone().sub(target);
+      this.controls.target.copy(shifted);this.controls.cursor.copy(cursor).add(delta);this.camera.position.copy(position).add(delta);
+      this.focus=anchor;
+      this.camera.far=Math.max(this.camera.far,this.camera.position.distanceTo(shifted)+Math.max(this.model.widthKm,this.model.depthKm)*6);
+      this.camera.updateProjectionMatrix();
+      this.controls.minDistance=Math.min(this.controls.minDistance,3);
+      this.controls.update();
+      if(fog)this.scene.fog=fog;
+    }else this.frameModel();
+    this.callbacks.onWindow([...bounds]);
     this.host.dataset.model=pilot.id;this.host.dataset.vertices=String(heights.length);this.geographyPending=this.refreshGeography();
   }
   async refreshGeography(){
@@ -269,7 +290,7 @@ export class MountainScene{
     this.geographyLabels.forEach(l=>l.el.remove());this.geographyLabels=[];if(!this.model)return;
     const [w,s,e,n]=this.model.bounds,seen=new Set<string>();
     const priority=(f:PlaceEntry)=>f.id===this.selectedFeature?.id?100:['Phewa Lake','Seti Gandaki River','Pokhara'].includes(f.name??'')?95:f.kind==='city'?90:f.kind==='lake'?80:f.kind==='river'?70:f.kind==='town'?60:30;
-    const entries:PlaceEntry[]=[...this.geography];if(this.selectedFeature&&!entries.some(f=>f.id===this.selectedFeature?.id))entries.push(this.selectedFeature);
+    const entries:PlaceEntry[]=this.selectedFeature?[this.selectedFeature,...this.geography.filter(f=>f.id!==this.selectedFeature!.id)]:[...this.geography];
     const candidates=entries.filter(f=>(f.name||f.id===this.selectedFeature?.id)&&f.kind!=='residential'&&f.center[0]>=w&&f.center[0]<=e&&f.center[1]>=s&&f.center[1]<=n).sort((a,b)=>priority(b)-priority(a)||(b.areaKm2??0)-(a.areaKm2??0));
     for(const f of candidates){
       if(this.geographyLabels.length>=65)break;const key=f.layer+f.name;if(seen.has(key))continue;seen.add(key);
@@ -287,17 +308,27 @@ export class MountainScene{
     const tolerance=hit.distance*Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2))*16/rect.height/m.widthKm*(m.bounds[2]-m.bounds[0]);
     const f=(this.floodPilot?pickGeography(this.floodPilot.areas.map(areaFeature),coord,tolerance,{rivers:true,lakes:true,settlements:true}):null)??pickGeography(this.geography,coord,tolerance,this.layers);if(f){const feature=f.layer==='rivers'?{...f,center:coord}:f;this.selectGeography(feature);this.callbacks.onFeature(feature);}
   };
-  selectGeography(feature:PlaceEntry|null){this.selectedFeature=feature;this.paintLayers();this.buildGeographyLabels();}
+  selectGeography(feature:PlaceEntry|null){if(feature?.layer==='rivers')this.stopCameraMotion();this.selectedFeature=feature;this.paintLayers();this.buildGeographyLabels();}
+  async selectRiver(feature:PlaceEntry){
+    const m=this.model,[lng,lat]=feature.center;
+    if(m&&lng>=m.bounds[0]&&lng<=m.bounds[2]&&lat>=m.bounds[1]&&lat<=m.bounds[3]){
+      this.selectGeography(feature);return true;
+    }
+    // A search result outside the loaded landscape still needs navigation.
+    return this.focusGeography(feature);
+  }
   async focusGeography(feature:PlaceEntry){
+    const riverDirection=feature.layer==='rivers'?this.camera.position.clone().sub(this.controls.target).normalize():null;
+    this.stopCameraMotion();
     const [lng,lat]=feature.center;const key=`area-${Math.floor(lng*2)}-${Math.floor(lat*2)}`;
-    const m=this.model,inside=!!this.floodPilot?.areas.some(area=>area.id===feature.id)||(m&&m.id!=='nepal'&&this.request===this.renderedRequest&&feature.bounds[0]>=m.bounds[0]&&feature.bounds[1]>=m.bounds[1]&&feature.bounds[2]<=m.bounds[2]&&feature.bounds[3]<=m.bounds[3]);
-    if(!inside){const loaded=await this.load(key,feature.center);if(!loaded)return false;}
+    const m=this.model,inside=!!this.floodPilot?.reachIds.includes(feature.id)||!!this.floodPilot?.areas.some(area=>area.id===feature.id)||(m&&m.id!=='nepal'&&this.request===this.renderedRequest&&feature.bounds[0]>=m.bounds[0]&&feature.bounds[1]>=m.bounds[1]&&feature.bounds[2]<=m.bounds[2]&&feature.bounds[3]<=m.bounds[3]);
+    if(!inside){const loaded=await this.load(key,feature.center,null,!!riverDirection);if(!loaded)return false;}
     const token=this.request;await this.geographyPending;if(this.disposed||token!==this.request)return false;
     this.focus=feature.center;this.selectedId=null;this.controls.target.copy(this.world(lng,lat));this.controls.cursor.copy(this.controls.target);this.selectGeography(feature);
     const size=Math.max((feature.bounds[2]-feature.bounds[0])*98,(feature.bounds[3]-feature.bounds[1])*111);
     const distance=Math.min(50,Math.max(feature.kind==='residential'?2.8:feature.layer==='settlements'?14:10,size*2.7))*(this.camera.aspect<.8?1.5:1);
     const target=this.controls.target.clone(),from=this.camera.position.clone();
-    const to=target.clone().addScaledVector(this.topDown?new THREE.Vector3(0,1,.001):new THREE.Vector3(.12,.55,.85).normalize(),distance);
+    const to=target.clone().addScaledVector(riverDirection??(this.topDown?new THREE.Vector3(0,1,.001):new THREE.Vector3(.12,.55,.85).normalize()),distance);
     this.flight=null;this.camera.position.copy(to);this.controls.update();
     if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){this.camera.position.copy(from);this.flight={start:performance.now(),duration:1100,from,to,targetFrom:target.clone(),targetTo:target.clone()};}
     return true;
@@ -324,18 +355,21 @@ export class MountainScene{
   resize(){const width=this.host.clientWidth,height=this.host.clientHeight;if(width<1||height<1)return;this.camera.aspect=width/height;this.camera.updateProjectionMatrix();this.renderer.setSize(width,height,false);}
   getBearing(){const offset=this.camera.position.clone().sub(this.controls.target);return THREE.MathUtils.radToDeg(Math.atan2(offset.x,offset.z));}
   getCoordinates(){if(!this.model)return this.focus;const m=this.model;return [m.center[0]+this.controls.target.x/m.widthKm*(m.bounds[2]-m.bounds[0]),m.center[1]-this.controls.target.z/m.depthKm*(m.bounds[3]-m.bounds[1])] as [number,number];}
+  private stopCameraMotion(){
+    this.flight=null;this.pointerStart=null;
+    if(this.continuationTimer){clearTimeout(this.continuationTimer);this.continuationTimer=null;}
+    // Flush the old gesture's damping through the public controls API, then
+    // restore the exact pose so selection and mode changes cannot move the landscape.
+    const position=this.camera.position.clone(),target=this.controls.target.clone();
+    const damping=this.controls.enableDamping;
+    this.controls.saveState();this.controls.enableDamping=false;this.controls.reset();
+    this.camera.position.copy(position);this.controls.target.copy(target);
+    this.controls.enableDamping=damping;this.controls.update();
+  }
   setNavigationMode(mode:'pan'|'orbit'){
     if(this.navigationMode===mode)return;
     if(this.navigationMode!==null){
-      this.flight=null;this.pointerStart=null;
-      if(this.continuationTimer){clearTimeout(this.continuationTimer);this.continuationTimer=null;}
-      // Flush the old gesture's damping through the public controls API, then
-      // restore this exact pose. A mode change must never move the landscape.
-      const position=this.camera.position.clone(),target=this.controls.target.clone();
-      const damping=this.controls.enableDamping;
-      this.controls.saveState();this.controls.enableDamping=false;this.controls.reset();
-      this.camera.position.copy(position);this.controls.target.copy(target);
-      this.controls.enableDamping=damping;this.controls.update();this.callbacks.onInteraction();
+      this.stopCameraMotion();this.callbacks.onInteraction();
     }
     this.navigationMode=mode;
     this.controls.mouseButtons.LEFT=mode==='pan'?THREE.MOUSE.PAN:THREE.MOUSE.ROTATE;

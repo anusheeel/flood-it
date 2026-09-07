@@ -60,9 +60,9 @@ export default function Home() {
     stopTour();clearAssessment();setQuery('');const pilot=await loadPilot();if(!await loadTerrain('flood-narayani',PILOT_CENTER))return false;
     const feature=pilotFeature(pilot);setGeoFeature(feature);setFloodRiver(feature);setSelected(null);setOverviewMode(false);mountain.current?.selectGeography(feature);return true;
   }
-  function openFlood(){stopTour();setQuery('');setStep('scenario');setGeoOpen(true);if(geoFeature?.layer==='rivers'&&geoFeature.id!==floodRiver?.id)setFloodRiver(geoFeature);}
+  function openFlood(){stopTour();setQuery('');setStep('scenario');setGeoOpen(true);if(geoFeature?.layer==='rivers'&&(geoFeature.id!==floodRiver?.id||geoFeature.center[0]!==floodRiver.center[0]||geoFeature.center[1]!==floodRiver.center[1]))setFloodRiver(geoFeature);}
   function clearAssessment(){floodContext.current={pilot:null,result:null};setFloodResult(null);setFloodRiver(null);mountain.current?.setFloodOverlay(null,null);}
-  async function chooseFloodRiver(feature:PlaceEntry){clearAssessment();if(await flyGeography(feature,true))setFloodRiver(feature);}
+  async function chooseFloodRiver(feature:PlaceEntry){clearAssessment();if(await flyGeography(feature,true,true))setFloodRiver(feature);}
   function changeNavigation(mode:'pan'|'orbit'){
     mountain.current?.setNavigationMode(mode);
     setNavigationMode(mode);
@@ -76,11 +76,11 @@ export default function Home() {
   async function flyPeak(p:Peak){clearAssessment();closeFlood();setQuery('');setGeoFeature(null);setOverviewMode(false);setSelected(p);setRangeId(p.range);if(window.innerWidth<760)setGeoOpen(false);await loadTerrain('peak-'+p.id,p.coords,p.id);}
   async function flyRange(r:Range){clearAssessment();closeFlood();stopTour();setQuery('');setGeoFeature(null);setOverviewMode(false);setRangeId(r.id);setSelected(null);if(window.innerWidth<760)setGeoOpen(false);await loadTerrain('range-'+r.id,r.id==='annapurna'?[83.88,28.48]:r.coords);}
   function overview(){clearAssessment();closeFlood();stopTour();setQuery('');setGeoFeature(null);setOverviewMode(true);setSelected(null);void loadTerrain('nepal',[84.14,28.45]).catch(()=>{});}
-  async function flyGeography(feature:PlaceEntry,keepFlood=false){
+  async function flyGeography(feature:PlaceEntry,keepFlood=false,selectOnly=false){
     if(!keepFlood){clearAssessment();closeFlood();}
     const scene=mountain.current;if(!scene)return false;stopTour();setQuery('');setGeoOpen(window.innerWidth>=760);setGeoFeature(feature);setSelected(null);setOverviewMode(false);setGeoLayers(layers=>({...layers,[feature.layer]:true}));
     const token=++navigationId.current;setLoading(true);setError('');
-    try{const complete=await scene.focusGeography(feature);if(complete&&token===navigationId.current){setReady(true);setLoading(false);return true;}return false;}
+    try{const complete=await (selectOnly?scene.selectRiver(feature):scene.focusGeography(feature));if(complete&&token===navigationId.current){setReady(true);setLoading(false);return true;}return false;}
     catch(error){if(token===navigationId.current){setLoading(false);setError(error instanceof Error?error.message:'This landscape could not be loaded.');}return false;}
   }
   useEffect(()=>{selectRef.current=async p=>{stopTour();await flyPeak(p);};rangeActionRef.current=flyRange;geoActionRef.current=flyGeography;});
@@ -171,8 +171,8 @@ export default function Home() {
           <button className="collapse-explorer" aria-label={geoOpen?'Collapse explorer':'Expand explorer'} onClick={()=>setGeoOpen(v=>!v)}>{geoOpen?<ChevronUp size={17}/>:<ChevronDown size={17}/>}</button>
         </nav>
         <div className="explorer-content" hidden={!geoOpen}>
-          <div className="explorer-pane" hidden={step!=='explore'}><GeographyPanel key={rangeId+':'+(selected?.id??'')} open={true} onOpen={setGeoOpen} query={query} onQuery={setQuery} layers={geoLayers} onLayers={setGeoLayers} status={geoStatus} selected={geoFeature} summit={selected} range={activeRange} country={overviewMode} bounds={terrainBounds} onPeak={p=>{stopTour();void flyPeak(p).catch(()=>{});}} onRange={r=>{void flyRange(r).catch(()=>{});}} onSelect={p=>{void flyGeography(p);}} onClear={()=>{setGeoFeature(null);mountain.current?.selectGeography(null);}} onRetry={()=>{void mountain.current?.refreshGeography();}} busy={loading||continuing||!ready} onFlood={openFlood}/>{floodResult&&<button className="resume-review" onClick={()=>setStep('review')}><Waves size={16}/>Return to +{floodResult.scenario.stage.toFixed(1)} m results<ChevronRight size={16}/></button>}</div>
-          <div className="explorer-pane" hidden={step==='explore'}><FloodPanel key={floodRiver?`${floodRiver.id}:${floodRiver.center.join(',')}`:'no-reach'} river={floodRiver} selected={geoFeature} ready={ready&&!loading} onPilot={openPilot} bounds={terrainBounds??[79.35,25.35,88.65,31.15]} onRiver={river=>{setStep('scenario');void chooseFloodRiver(river);}} onInspect={area=>{void flyGeography(area,true);}} onOverlay={showFloodOverlay} onClose={closeFlood} review={step==='review'&&geoOpen} onReview={()=>setStep('review')} onEdit={()=>setStep('scenario')} onCapture={()=>{const scene=mountain.current;if(!scene)throw new Error('The terrain is still loading.');return scene.captureView();}} onClearSelection={()=>{setGeoFeature(null);mountain.current?.selectGeography(null);}}/></div>
+          <div className="explorer-pane" hidden={step!=='explore'}><GeographyPanel key={rangeId+':'+(selected?.id??'')} open={true} onOpen={setGeoOpen} query={query} onQuery={setQuery} layers={geoLayers} onLayers={setGeoLayers} status={geoStatus} selected={geoFeature} summit={selected} range={activeRange} country={overviewMode} bounds={terrainBounds} onPeak={p=>{stopTour();void flyPeak(p).catch(()=>{});}} onRange={r=>{void flyRange(r).catch(()=>{});}} onSelect={p=>{void flyGeography(p,false,p.layer==='rivers');}} onFocus={p=>{void flyGeography(p);}} onClear={()=>{setGeoFeature(null);mountain.current?.selectGeography(null);}} onRetry={()=>{void mountain.current?.refreshGeography();}} busy={loading||continuing||!ready} onFlood={openFlood}/>{floodResult&&<button className="resume-review" onClick={()=>setStep('review')}><Waves size={16}/>Return to +{floodResult.scenario.stage.toFixed(1)} m results<ChevronRight size={16}/></button>}</div>
+          <div className="explorer-pane" hidden={step==='explore'}><FloodPanel key={floodRiver?`${floodRiver.id}:${floodRiver.center.join(',')}`:'no-reach'} river={floodRiver} selected={geoFeature} ready={ready&&!loading} onPilot={openPilot} bounds={terrainBounds??[79.35,25.35,88.65,31.15]} onRiver={river=>{setStep('scenario');void chooseFloodRiver(river);}} onInspect={area=>{void flyGeography(area,true);}} onFocusRiver={()=>{if(floodRiver)void flyGeography(floodRiver,true);}} onOverlay={showFloodOverlay} onClose={closeFlood} review={step==='review'&&geoOpen} onReview={()=>setStep('review')} onEdit={()=>setStep('scenario')} onCapture={()=>{const scene=mountain.current;if(!scene)throw new Error('The terrain is still loading.');return scene.captureView();}} onClearSelection={()=>{setGeoFeature(null);mountain.current?.selectGeography(null);}}/></div>
         </div>
       </div>
       <section className="map-stage" aria-label="Interactive 3D terrain of Nepal">

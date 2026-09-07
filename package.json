@@ -9,7 +9,7 @@
     "dev": "node scripts/build-worker.mjs && next dev --webpack",
     "build": "node scripts/build-worker.mjs && next build --webpack && node scripts/test-worker-build.mjs",
     "start": "next start",
-    "test": "node scripts/test-national-flood.mjs && node scripts/test-study-ui.mjs && node scripts/test-geography.mjs",
+    "test": "node scripts/test-national-flood.mjs && node scripts/test-study-ui.mjs && node scripts/test-geography.mjs && node scripts/test-river-camera.mjs",
     "lint": "oxlint app",
     "format": "oxfmt",
     "pretest": "node scripts/build-worker.mjs"
