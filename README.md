@@ -1,5 +1,7 @@
 # Flood IT · Nepal
 
+[Open the live atlas](https://flood-it-rose.vercel.app)
+
 An interactive Three.js atlas of Nepal’s mountains, rivers, lakes and settlements, with experimental terrain-connected flood exposure screening.
 
 **Explore → Scenario → Review → Capture.** Follow a mountain range, select a natural river or stream, set a hypothetical channel-reference offset, and inspect the mapped residential land touched by the scenario. Download an area snapshot with its scenario and source notes attached.
