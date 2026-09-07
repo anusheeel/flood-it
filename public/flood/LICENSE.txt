@@ -1,0 +1,12 @@
+Flood IT experimental screening datasets — connected-stage-v1 (Narayani benchmark) and connected-stage-national-v2
+
+OpenStreetMap data © OpenStreetMap contributors. Source: Geofabrik Nepal, snapshot 2026-09-06T20:21:35Z. Original pilot geographic features and the OSM-derived geographic database are available under the Open Database License 1.0: https://opendatacommons.org/licenses/odbl/1-0/
+National unsimplified river, stream, water and residential features are distributed in inputs/*.json.gz, with a catalogue and source coverage in inputs/manifest.json. Tile SHA-256 hashes describe the uncompressed JSON payload. Download links are listed in inputs/data.html.
+The original pilot source features are distributed as narayani/source.geojson. The adapted polygon and scenario database is in narayani/manifest.json. Mapped features may be missing or outdated. Residential land use does not represent individual houses or population.
+
+Produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
+The organisations in charge of the Copernicus programme by law or by delegation do not incur any liability for any use of the Copernicus WorldDEM-30.
+Licence: https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Data/DEM/resources/license/License-COPDEM-30.pdf
+Subsequent distribution of adapted Copernicus elevation data must preserve these attribution, liability and licence obligations. Data providers do not endorse Flood IT.
+
+Experimental, uncalibrated terrain-connected screening. No operational forecast, flood probability, velocity, arrival time or safety determination. Source resolution is not vertical accuracy. See method.html for algorithms, omitted processes, uncertainty, and validation status.

@@ -1,0 +1,1 @@
+Elevation: Mapterhorn, https://mapterhorn.com/attribution/ . Terrarium tiles downloaded 2026-09-07. Grids sampled in geographic coordinates to integer metres; see manifest.json for resolution and bounds. Range anchors are approximate. These models visualize terrain and are not navigation or surveying data. Surface colors are illustrative, not satellite photographs.

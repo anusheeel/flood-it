@@ -1,0 +1,12 @@
+import {Worker} from 'node:worker_threads';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {gunzipSync} from 'node:zlib';
+import {workerPaths} from './test-worker-build.mjs';
+const origin=process.env.FLOOD_TEST_ORIGIN||'http://localhost:3002',url=new URL(workerPaths[0],origin).href;
+const response=await fetch(url);assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/javascript/);
+assert.equal((await fetch(origin)).status,200);
+const river=JSON.parse(gunzipSync(fs.readFileSync(new URL('../public/flood/inputs/rivers.json.gz',import.meta.url)))).find(f=>f.id==='way/516115768');
+const bootstrap=`import {parentPort} from 'node:worker_threads';import vm from 'node:vm';globalThis.self=globalThis;const fetchSource=globalThis.fetch;globalThis.fetch=(url,options)=>fetchSource(new URL(url,${JSON.stringify(origin)}),options);self.postMessage=(value,options)=>parentPort.postMessage(value,options?.transfer);const response=await fetch(${JSON.stringify(url)});if(!response.ok)throw new Error('Worker asset failed');vm.runInThisContext(await response.text());parentPort.on('message',data=>self.onmessage({data}));`;
+const worker=new Worker(new URL('data:text/javascript,'+encodeURIComponent(bootstrap)),{type:'module'}),start=Date.now();
+await new Promise((resolve,reject)=>{worker.on('error',reject);worker.on('message',data=>{if(data.progress)console.log(data.progress);else if(data.error){reject(new Error(data.error));worker.terminate();}else{assert(data.pilot.runtime.thresholds instanceof Float32Array);assert(data.pilot.scenarios[6].residentialAreaM2>0);console.log('PASS actual emitted worker URL → HTTP script → native elevations →',data.pilot.areas.length,'residential polygons in',Date.now()-start,'ms');worker.terminate();resolve();}});worker.postMessage({river,length:6,origin});});
