@@ -7,9 +7,11 @@ import { landscapeMaterial, landscapeSky } from './terrain-material';
 import { settlementIcon } from './settlement-symbol';
 import { areaFeature, type FloodPilot, type FloodResult } from './flood';
 import { paintFlood } from './flood-texture';
+import { BuildingOverlay } from './building-overlay';
+import type { BuildingStatus } from './buildings';
 
 type TerrainModel={id:string;center:[number,number];bounds:[number,number,number,number];cols:number;rows:number;widthKm:number;depthKm:number;minHeight:number;maxHeight:number;file:string};
-type Callbacks={onPeak:(peak:Peak)=>void;onInteraction:()=>void;onPosition:(lng:number,lat:number,bearing:number)=>void;onError:(message:string)=>void;onFeature:(feature:PlaceEntry)=>void;onGeography:(status:GeographyStatus)=>void;onWindow:(bounds:number[])=>void;onContinuing:(loading:boolean)=>void};
+type Callbacks={onBuildings?:(status:BuildingStatus)=>void;onPeak:(peak:Peak)=>void;onInteraction:()=>void;onPosition:(lng:number,lat:number,bearing:number)=>void;onError:(message:string)=>void;onFeature:(feature:PlaceEntry)=>void;onGeography:(status:GeographyStatus)=>void;onWindow:(bounds:number[])=>void;onContinuing:(loading:boolean)=>void};
 type Label={el:HTMLButtonElement;position:THREE.Vector3;peak:Peak};
 export class MountainScene{
   private renderer:THREE.WebGLRenderer;
@@ -26,6 +28,8 @@ export class MountainScene{
   private markerLabels:Label[]=[];
   private geographyLabels:{el:HTMLButtonElement;position:THREE.Vector3;feature:PlaceEntry}[]=[];
   private geography:GeoFeature[]=[];
+  private buildings:BuildingOverlay|null=null;
+  private buildingPose='';
   private geographyRequest=0;
   private geographyPending:Promise<void>=Promise.resolve();
   private layers:LayerVisibility={...DEFAULT_LAYERS};
@@ -71,6 +75,7 @@ export class MountainScene{
     };
     this.geoCanvas.width=this.geoCanvas.height=window.innerWidth<760?2048:4096;
     this.geoTexture=new THREE.CanvasTexture(this.geoCanvas);this.geoTexture.colorSpace=THREE.SRGBColorSpace;this.geoTexture.anisotropy=Math.min(8,this.renderer.capabilities.getMaxAnisotropy());
+    this.buildings=new BuildingOverlay(status=>{this.host.dataset.buildings=status.mode;this.host.dataset.buildingCount=String(status.count);callbacks.onBuildings?.(status);},window.innerWidth<760);
     const canvas=this.renderer.domElement;canvas.className='mountain-webgl';canvas.tabIndex=0;canvas.setAttribute('aria-label','3D Nepal landscape. Drag to pan, right-drag to orbit. Scroll or pinch to zoom. Arrow keys pan.');
     canvas.style.cssText='display:block;width:100%;height:100%;position:absolute;inset:0;touch-action:none';
     host.appendChild(canvas);
@@ -144,7 +149,8 @@ export class MountainScene{
     let k=0;for(let row=0;row<m.rows-1;row++)for(let col=0;col<m.cols-1;col++){const a=row*m.cols+col,b=a+1,c=a+m.cols,d=c+1;indices.set([a,c,b,b,c,d],k);k+=6;}
     const uv=new Float32Array(m.cols*m.rows*2);for(let row=0;row<m.rows;row++)for(let col=0;col<m.cols;col++){const i=(row*m.cols+col)*2;uv[i]=col/(m.cols-1);uv[i+1]=1-row/(m.rows-1);}
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.BufferAttribute(uv,2));geometry.setIndex(new THREE.BufferAttribute(indices,1));geometry.computeVertexNormals();
-    const material=landscapeMaterial(this.geoTexture,new THREE.Vector2(m.center[0]*98,-m.center[1]*111.32));
+    this.buildings?.setModel(m.bounds);this.buildingPose='';
+    const material=landscapeMaterial(this.geoTexture,new THREE.Vector2(m.center[0]*98,-m.center[1]*111.32),this.buildings?.uniforms);
     this.terrain=new THREE.Mesh(geometry,material);this.terrain.receiveShadow=true;this.terrain.castShadow=m.id!=='nepal';this.scene.add(this.terrain);this.colorMesh();
     const edge:number[]=[];for(let c=0;c<m.cols;c++)edge.push(c);for(let r=1;r<m.rows;r++)edge.push(r*m.cols+m.cols-1);for(let c=m.cols-2;c>=0;c--)edge.push((m.rows-1)*m.cols+c);for(let r=m.rows-2;r>0;r--)edge.push(r*m.cols);
     const skirtVertices:number[]=[];const base=Math.max(-1,m.minHeight/1000-1.3);
@@ -233,7 +239,7 @@ export class MountainScene{
       label.el.style.display=visible?'':'none';if(visible){label.el.style.transform=`translate(-50%,-100%) translate(${x}px,${y-10}px)`;occupied.push({x,y});visibleCount++;}
     }
   }
-  private paintLayers(){if(!this.model)return;paintGeography(this.geoCanvas,this.geography,this.model.bounds,this.layers,this.selectedFeature);if(this.floodPilot)paintFlood(this.geoCanvas,this.floodPilot,this.floodResult,this.model.bounds,this.selectedFeature?.id??null);this.geoTexture.needsUpdate=true;this.host.dataset.layers=Object.entries(this.layers).filter(([,v])=>v).map(([k])=>k).join(',');}
+  private paintLayers(){if(!this.model)return;paintGeography(this.geoCanvas,this.geography,this.model.bounds,this.layers,this.selectedFeature);if(this.floodPilot)paintFlood(this.geoCanvas,this.floodPilot,this.floodResult,this.model.bounds,this.selectedFeature?.id??null);this.geoTexture.needsUpdate=true;this.buildings?.setGeography(this.geography,this.layers,this.selectedFeature,this.floodPilot,this.floodResult);this.host.dataset.layers=Object.entries(this.layers).filter(([,v])=>v).map(([k])=>k).join(',');}
   setFloodOverlay(pilot:FloodPilot|null,result:FloodResult|null){
     this.floodPilot=pilot;this.floodResult=result;
     if(pilot?.runtime&&this.model?.id!==pilot.id)this.showAssessmentTerrain(pilot);
@@ -295,7 +301,7 @@ export class MountainScene{
     for(const f of candidates){
       if(this.geographyLabels.length>=65)break;const key=f.layer+f.name;if(seen.has(key))continue;seen.add(key);
       const el=document.createElement('button');el.className=`three-place ${f.layer}${f.id===this.selectedFeature?.id?' selected':''}`;el.setAttribute('aria-label','Inspect '+featureName(f));
-      if(f.layer==='settlements'){const badge=document.createElement('span');badge.className='settlement-marker';badge.appendChild(settlementIcon());el.appendChild(badge);el.title=featureName(f)+' · '+f.kind+' (settlement marker)';}
+      if(f.layer==='settlements'){const badge=document.createElement('span');badge.className='settlement-marker';badge.appendChild(settlementIcon());el.appendChild(badge);el.title=featureName(f)+' · '+f.kind+(f.kind==='building'?' (mapped footprint)':' (place label)');}
       const name=document.createElement('span');name.className='place-name';name.textContent=featureName(f);el.appendChild(name);
       el.onclick=()=>{this.selectGeography(f);this.callbacks.onFeature(f);};this.labelLayer.appendChild(el);const position=this.world(...f.center);position.y+=this.model.id==='nepal'?1.2:.1;this.geographyLabels.push({el,position,feature:f});
     }
@@ -306,9 +312,9 @@ export class MountainScene{
     const rect=this.renderer.domElement.getBoundingClientRect(),pointer=new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),ray=new THREE.Raycaster();ray.setFromCamera(pointer,this.camera);
     const hit=ray.intersectObject(this.terrain)[0];if(!hit)return;const m=this.model,coord:[number,number]=[m.center[0]+hit.point.x/m.widthKm*(m.bounds[2]-m.bounds[0]),m.center[1]-hit.point.z/m.depthKm*(m.bounds[3]-m.bounds[1])];
     const tolerance=hit.distance*Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2))*16/rect.height/m.widthKm*(m.bounds[2]-m.bounds[0]);
-    const f=(this.floodPilot?pickGeography(this.floodPilot.areas.map(areaFeature),coord,tolerance,{rivers:true,lakes:true,settlements:true}):null)??pickGeography(this.geography,coord,tolerance,this.layers);if(f){const feature=f.layer==='rivers'?{...f,center:coord}:f;this.selectGeography(feature);this.callbacks.onFeature(feature);}
+    const f=(!this.floodPilot?this.buildings?.pick(coord):null)??(this.floodPilot?pickGeography(this.floodPilot.areas.map(areaFeature),coord,tolerance,{rivers:true,lakes:true,settlements:true}):null)??pickGeography(this.geography,coord,tolerance,this.layers);if(f){const feature=f.layer==='rivers'?{...f,center:coord}:f;this.selectGeography(feature);this.callbacks.onFeature(feature);}
   };
-  selectGeography(feature:PlaceEntry|null){if(feature?.layer==='rivers')this.stopCameraMotion();this.selectedFeature=feature;this.paintLayers();this.buildGeographyLabels();}
+  selectGeography(feature:PlaceEntry|null){if(feature?.layer==='rivers')this.stopCameraMotion();this.selectedFeature=feature;this.buildings?.select(feature?.id);this.paintLayers();this.buildGeographyLabels();}
   async selectRiver(feature:PlaceEntry){
     const m=this.model,[lng,lat]=feature.center;
     if(m&&lng>=m.bounds[0]&&lng<=m.bounds[2]&&lat>=m.bounds[1]&&lat<=m.bounds[3]){
@@ -326,7 +332,7 @@ export class MountainScene{
     const token=this.request;await this.geographyPending;if(this.disposed||token!==this.request)return false;
     this.focus=feature.center;this.selectedId=null;this.controls.target.copy(this.world(lng,lat));this.controls.cursor.copy(this.controls.target);this.selectGeography(feature);
     const size=Math.max((feature.bounds[2]-feature.bounds[0])*98,(feature.bounds[3]-feature.bounds[1])*111);
-    const distance=Math.min(50,Math.max(feature.kind==='residential'?2.8:feature.layer==='settlements'?14:10,size*2.7))*(this.camera.aspect<.8?1.5:1);
+    const distance=Math.min(50,Math.max(feature.kind==='residential'||feature.kind==='building'?2.8:feature.layer==='settlements'?14:10,size*2.7))*(this.camera.aspect<.8?1.5:1);
     const target=this.controls.target.clone(),from=this.camera.position.clone();
     const to=target.clone().addScaledVector(riverDirection??(this.topDown?new THREE.Vector3(0,1,.001):new THREE.Vector3(.12,.55,.85).normalize()),distance);
     this.flight=null;this.camera.position.copy(to);this.controls.update();
@@ -345,13 +351,30 @@ export class MountainScene{
     ctx.fillStyle='#7995a1';ctx.fillRect(0,0,capture.width,capture.height);ctx.drawImage(this.renderer.domElement,0,0);
     return capture;
   }
+  setBuildings(visible:boolean){this.buildings?.setVisible(visible);this.buildingPose='';}
+  retryBuildings(){this.buildings?.retry();this.buildingPose='';}
   setLayers(layers:LayerVisibility){this.layers={...layers};this.paintLayers();this.buildGeographyLabels();}
   private render=()=>{
     if(this.disposed)return;this.frame=requestAnimationFrame(this.render);
     const now=performance.now();if(this.flight){const t=Math.min(1,(now-this.flight.start)/this.flight.duration),e=t*t*(3-2*t);this.camera.position.lerpVectors(this.flight.from,this.flight.to,e);this.controls.target.lerpVectors(this.flight.targetFrom,this.flight.targetTo,e);if(t===1)this.flight=null;}
     this.controls.update();if(this.sky){this.sky.position.copy(this.camera.position);this.sky.scale.setScalar(this.camera.far*.85);}this.renderer.render(this.scene,this.camera);this.updateLabels();
-    if(this.model&&now-this.lastReport>800){const m=this.model;const lng=m.center[0]+this.controls.target.x/m.widthKm*(m.bounds[2]-m.bounds[0]),lat=m.center[1]-this.controls.target.z/m.depthKm*(m.bounds[3]-m.bounds[1]);this.callbacks.onPosition(lng,lat,this.getBearing());this.lastReport=now;}
+    if(this.model&&now-this.lastReport>800){const m=this.model;const lng=m.center[0]+this.controls.target.x/m.widthKm*(m.bounds[2]-m.bounds[0]),lat=m.center[1]-this.controls.target.z/m.depthKm*(m.bounds[3]-m.bounds[1]);this.callbacks.onPosition(lng,lat,this.getBearing());this.lastReport=now;this.refreshBuildingView();}
   };
+  private refreshBuildingView(){
+    if(!this.model||!this.buildings||this.flight)return;
+    const pose=[...this.camera.position.toArray(),...this.controls.target.toArray(),this.camera.aspect].map(v=>v.toFixed(3)).join(',');
+    if(pose===this.buildingPose)return;this.buildingPose=pose;
+    const distance=this.camera.position.distanceTo(this.controls.target);
+    let center=this.getCoordinates();
+    if(distance<=14&&this.terrain){
+      // Follow the ground under the viewport centre, even when the orbit target
+      // is above a valley. No camera movement or camera state updates here.
+      const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(0,0),this.camera);
+      const hit=ray.intersectObject(this.terrain)[0],m=this.model;
+      if(hit)center=[m.center[0]+hit.point.x/m.widthKm*(m.bounds[2]-m.bounds[0]),m.center[1]-hit.point.z/m.depthKm*(m.bounds[3]-m.bounds[1])];
+    }
+    void this.buildings.updateView(center,distance);
+  }
   resize(){const width=this.host.clientWidth,height=this.host.clientHeight;if(width<1||height<1)return;this.camera.aspect=width/height;this.camera.updateProjectionMatrix();this.renderer.setSize(width,height,false);}
   getBearing(){const offset=this.camera.position.clone().sub(this.controls.target);return THREE.MathUtils.radToDeg(Math.atan2(offset.x,offset.z));}
   getCoordinates(){if(!this.model)return this.focus;const m=this.model;return [m.center[0]+this.controls.target.x/m.widthKm*(m.bounds[2]-m.bounds[0]),m.center[1]-this.controls.target.z/m.depthKm*(m.bounds[3]-m.bounds[1])] as [number,number];}
@@ -413,5 +436,5 @@ export class MountainScene{
   setSurface(natural:boolean){this.natural=natural;this.colorMesh();}
   setLabels(show:boolean){this.showLabels=show;}
   isReady(){return !!this.terrain&&!this.disposed&&!this.shaderError;}
-  dispose(){this.disposed=true;this.request++;this.geographyRequest++;cancelAnimationFrame(this.frame);this.resizeObserver.disconnect();if(this.continuationTimer)clearTimeout(this.continuationTimer);this.host.removeEventListener('wheel',this.surfaceWheel,true);this.host.removeEventListener('gesturestart',this.gestureStart);this.host.removeEventListener('gesturechange',this.gestureChange);this.host.removeEventListener('gestureend',this.gestureEnd);this.renderer.domElement.removeEventListener('keyup',this.scheduleContinuation);this.controls.dispose();this.removeMesh();this.geoTexture.dispose();this.sky?.geometry.dispose();this.sky?.material.dispose();this.sun.shadow.map?.dispose();this.renderer.domElement.removeEventListener('webglcontextlost',this.contextLost);this.renderer.domElement.removeEventListener('pointerdown',this.pointerDown);this.renderer.domElement.removeEventListener('pointerup',this.pointerUp);this.renderer.dispose();this.renderer.domElement.remove();this.labelLayer.remove();}
+  dispose(){this.disposed=true;this.request++;this.geographyRequest++;cancelAnimationFrame(this.frame);this.resizeObserver.disconnect();if(this.continuationTimer)clearTimeout(this.continuationTimer);this.host.removeEventListener('wheel',this.surfaceWheel,true);this.host.removeEventListener('gesturestart',this.gestureStart);this.host.removeEventListener('gesturechange',this.gestureChange);this.host.removeEventListener('gestureend',this.gestureEnd);this.renderer.domElement.removeEventListener('keyup',this.scheduleContinuation);this.controls.dispose();this.removeMesh();this.geoTexture.dispose();this.buildings?.dispose();this.sky?.geometry.dispose();this.sky?.material.dispose();this.sun.shadow.map?.dispose();this.renderer.domElement.removeEventListener('webglcontextlost',this.contextLost);this.renderer.domElement.removeEventListener('pointerdown',this.pointerDown);this.renderer.domElement.removeEventListener('pointerup',this.pointerUp);this.renderer.dispose();this.renderer.domElement.remove();this.labelLayer.remove();}
 }
