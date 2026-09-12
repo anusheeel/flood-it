@@ -1,5 +1,4 @@
 import type { GeoFeature, Coordinate, LayerVisibility, PlaceEntry } from './geography';
-import { paintSettlement } from './settlement-symbol';
 
 // Drape mapped geometry directly onto the elevation mesh. Terrain UVs share these
 // geographic bounds, so water follows the same triangles without floating lines.
@@ -23,8 +22,8 @@ export function paintGeography(canvas: HTMLCanvasElement, features: GeoFeature[]
       else if (f.geometry.type === 'Polygon') polygon(f.geometry.coordinates);
       else if (f.geometry.type === 'MultiPolygon') f.geometry.coordinates.forEach(polygon);
       else { const p = f.geometry.coordinates;
-        if(layer==='settlements')paintSettlement(ctx,x(p[0]),y(p[1]),active?18:f.kind==='city'?16:f.kind==='town'?13:9,active);
-        else{ctx.beginPath();ctx.arc(x(p[0]),y(p[1]),active?5:3,0,Math.PI*2);ctx.fill();}
+        // Place nodes are labelled on screen. They are not individual buildings.
+        if(layer!=='settlements'){ctx.beginPath();ctx.arc(x(p[0]),y(p[1]),active?5:3,0,Math.PI*2);ctx.fill();}
       }
     }
   }

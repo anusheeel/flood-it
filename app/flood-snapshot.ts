@@ -25,7 +25,7 @@ export async function makeSnapshot(view:HTMLCanvasElement,pilot:FloodPilot,resul
   ctx.fillText(`© OpenStreetMap contributors · ODbL · Snapshot ${pilot.sourceTimestamp.slice(0,10)} · ${pilot.analysisVersion} · ${pilot.resolution}`,40,1035,1500);
   ctx.fillText(`Method & full data credits: ${window.location.origin}/flood/method.html`,40,1056,1500);
   ctx.fillText('Elevation: Copernicus WorldDEM-30 © DLR e.V. 2010–2014 & © Airbus Defence and Space GmbH 2014–2018; EU / ESA.',40,1077,1500);
-  ctx.fillText('Illustrative terrain materials. Flood extent is limited to the assessed window; outside does not mean safe.',40,1098,1500);
+  ctx.fillText('Building footprints are context only, not individually assessed. Outside the scenario does not mean safe.',40,1098,1500);
   const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('The snapshot could not be encoded.')),'image/png'));
   return {url:URL.createObjectURL(blob),filename:`flood-it-${area.id.replaceAll('/','-')}-${result.scenario.stage}m.png`};
 }

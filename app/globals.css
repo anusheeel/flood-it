@@ -213,3 +213,17 @@ body {
 @media(prefers-reduced-motion:reduce){.area-inspector,.explorer-shell{scroll-behavior:auto}}
 
 .river-selection-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:7px}.explorer-shell .river-selection-actions .change-river{margin:0}.focus-river{display:flex;align-items:center;gap:5px;min-height:32px;padding:5px 8px;font-size:11px;color:#a8e4ef;border:1px solid #88cbd540;border-radius:6px;background:#5bc1d00b;white-space:nowrap}
+
+/* Buildings have their own source coverage and display control. Place labels are symbolic. */
+.building-coverage{margin:4px 0 16px;padding:12px 0 0;border-top:1px solid #bed4df24;color:#aec4ce;font-size:11px;line-height:1.5}
+.building-coverage strong{display:flex;justify-content:space-between;font-size:12px;color:#e7d3b3;font-weight:500}
+.building-coverage p{margin:7px 0}.building-coverage small{font-size:10px;display:block;color:#91acb9}
+.building-coverage a,.building-coverage button{color:#a1dce5;font:inherit;background:none;border:0;padding:0;text-decoration:underline}
+.building-coverage [role=alert]{color:#edbc78}.building-source-note{line-height:1.6!important}
+.explorer-shell .guide-layers{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.explorer-shell .guide-layers>button{border:0;padding:0;justify-content:flex-start;font-size:12px}
+.explorer-shell .guide-layers>button>i{margin-left:auto}.guide-layers .buildings>svg{color:#e7d3b3}
+.settlement-legend .building-swatch{background:#e7d3b3;border-color:#e7d3b3}
+.unified-workspace .settlement-legend{flex-wrap:wrap;max-width:calc(100vw - 50px)}
+.unified-workspace .flood-map-legend small{display:block;max-width:250px;line-height:1.4}
+@media(max-width:759px){.unified-workspace .settlement-legend{top:170px;max-width:calc(100vw - 90px)}}

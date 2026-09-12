@@ -4,7 +4,7 @@ export type LayerVisibility = Record<LayerKey, boolean>;
 export type Coordinate = [number, number];
 export type GeoFeature = {
   id: string; layer: LayerKey; kind: string; name: string; localName?: string;
-  center: Coordinate; bounds: [number, number, number, number]; areaKm2?: number; intermittent?: boolean;
+  center: Coordinate; bounds: [number, number, number, number]; areaKm2?: number; intermittent?: boolean; buildingTag?: string;
   geometry: { type: 'Point'; coordinates: Coordinate } | { type: 'LineString'; coordinates: Coordinate[] }
     | { type: 'Polygon'; coordinates: Coordinate[][] } | { type: 'MultiPolygon'; coordinates: Coordinate[][][] };
 };
@@ -13,7 +13,7 @@ export type GeographyManifest = { timestamp: string; counts: Record<LayerKey, nu
 export type GeographyStatus = { loading: boolean; error: string; counts: Record<LayerKey, number>; overview: boolean };
 export const DEFAULT_LAYERS: LayerVisibility = { rivers: true, lakes: true, settlements: true };
 export const LAYER_NAMES = { rivers: 'Rivers & channels', lakes: 'Lakes & water', settlements: 'Settlements' };
-export const KIND_NAMES: Record<string, string> = { river: 'River channel', stream: 'Stream', canal: 'Canal', drain: 'Drain', ditch: 'Ditch', lake: 'Lake', pond: 'Pond', reservoir: 'Reservoir', water: 'Water body', riverbank: 'River water area', residential: 'Residential area', city: 'City', town: 'Town', village: 'Village', hamlet: 'Hamlet', isolated_dwelling: 'Isolated settlement', suburb: 'Suburb', neighbourhood: 'Neighbourhood' };
+export const KIND_NAMES: Record<string, string> = { building: 'Building footprint', river: 'River channel', stream: 'Stream', canal: 'Canal', drain: 'Drain', ditch: 'Ditch', lake: 'Lake', pond: 'Pond', reservoir: 'Reservoir', water: 'Water body', riverbank: 'River water area', residential: 'Residential area', city: 'City', town: 'Town', village: 'Village', hamlet: 'Hamlet', isolated_dwelling: 'Isolated settlement', suburb: 'Suburb', neighbourhood: 'Neighbourhood' };
 export const featureName = (p: PlaceEntry) => p.name || `Unnamed ${KIND_NAMES[p.kind]?.toLowerCase() || 'water body'}`;
 const cache = new Map<string, Promise<unknown>>();
 export async function geographyJSON<T>(file: string): Promise<T> {
